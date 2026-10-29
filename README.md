@@ -4,6 +4,23 @@ A Rust port of [Antitimely](https://github.com/jhionan/antitimely) for Windows. 
 
 Windows tracking combines foreground window titles, sustained process CPU activity and Claude Code / Codex / opencode transcripts. Company billing deduplicates time across that company's projects. Work for different companies can count in parallel.
 
+## Tech stack
+
+| Area | Technology |
+| --- | --- |
+| Language and build | Rust 2024 edition (Rust 1.88+), Cargo, Windows MSVC toolchain |
+| CLI and terminal UI | `clap` for commands and arguments; `crossterm` for terminal interaction |
+| Storage | SQLite via `rusqlite`, with bundled SQLite, WAL mode and foreign keys |
+| Windows tracking | Win32 APIs via the `windows` crate for foreground windows and input idle time; `sysinfo` for process CPU activity and working directories |
+| Background startup | Windows Task Scheduler (`schtasks.exe`), running per user at logon |
+| Configuration and data formats | `serde`, `serde_yaml` and `serde_json` for YAML configuration and JSON output/transcripts |
+| Time handling | `chrono` for dates and local time; `humantime` for duration settings |
+| Invoice PDFs | `pdf-writer`, `ttf-parser` and `image`, with an embedded Ubuntu font and PNG/JPEG logo support |
+| Worker lifecycle | `fs2` file locking for one worker per data directory; `ctrlc` for graceful shutdown |
+| Quality and CI | `rustfmt`, Clippy, Rust unit/integration tests and `tempfile`; GitHub Actions checks on Windows and Linux and builds a Windows x64 executable |
+
+Building on Windows requires Rust and the Visual Studio C++ build tools. Running the compiled `rit.exe` does not require a Rust SDK or Cargo installation.
+
 ## Build and run
 
 Install Rust 1.88 or later and the Visual Studio C++ build tools, then:
