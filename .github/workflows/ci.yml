@@ -2,6 +2,7 @@ name: Rust checks and Windows executable
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -59,4 +60,5 @@ jobs:
             README.md
             LICENSE
             config.invoice.example.yaml
+            assets/fonts/UFL.txt
           if-no-files-found: error

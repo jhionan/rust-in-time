@@ -40,8 +40,33 @@ fn schtasks(args: &[&std::ffi::OsStr]) -> Result<()> {
 #[cfg(windows)]
 pub fn install(data: &Path, config: &Path) -> Result<Value> {
     let exe = std::env::current_exe()?;
+    let identity = std::process::Command::new("whoami.exe")
+        .args(["/user", "/fo", "csv", "/nh"])
+        .output()
+        .context("read current Windows user identity")?;
+    ensure!(
+        identity.status.success(),
+        "could not identify current Windows user"
+    );
+    // The account name may use a legacy Windows code page; the SID itself
+    // is ASCII, so decoding the unused name must not make startup fail.
+    let identity_text = String::from_utf8_lossy(&identity.stdout);
+    let sid = identity_text
+        .trim()
+        .rsplit(',')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .trim_matches('"');
+    ensure!(
+        sid.starts_with("S-1-")
+            && sid
+                .bytes()
+                .all(|b| b.is_ascii_digit() || b == b'-' || b == b'S'),
+        "Windows user SID is missing from whoami output"
+    );
     let xml_path = data.join("startup-task.xml");
-    std::fs::write(&xml_path, task_xml(&exe, data, config))?;
+    std::fs::write(&xml_path, task_xml(&exe, data, config, sid))?;
     let name = task_name(data);
     schtasks(&[
         "/Create".as_ref(),
@@ -139,7 +164,7 @@ fn quote(s: &str) -> String {
     out
 }
 
-pub fn task_xml(exe: &Path, data: &Path, config: &Path) -> String {
+pub fn task_xml(exe: &Path, data: &Path, config: &Path, user_sid: &str) -> String {
     let args = format!(
         "--data-dir {} --config {} daemon",
         quote(&data.to_string_lossy()),
@@ -149,14 +174,15 @@ pub fn task_xml(exe: &Path, data: &Path, config: &Path) -> String {
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
  <RegistrationInfo><Description>Rust in Time project-aware time tracking</Description></RegistrationInfo>
- <Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>
- <Principals><Principal id="CurrentUser"><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
+ <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>{sid}</UserId></LogonTrigger></Triggers>
+ <Principals><Principal id="CurrentUser"><UserId>{sid}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure></Settings>
  <Actions Context="CurrentUser"><Exec><Command>{}</Command><Arguments>{}</Arguments><WorkingDirectory>{}</WorkingDirectory></Exec></Actions>
 </Task>"#,
         xml(&exe.to_string_lossy()),
         xml(&args),
-        xml(&data.to_string_lossy())
+        xml(&data.to_string_lossy()),
+        sid = xml(user_sid)
     )
 }
 
@@ -169,11 +195,13 @@ mod tests {
             Path::new(r"C:\Program Files\rit.exe"),
             Path::new("C:\\A&B\\"),
             Path::new(r"C:\User\config.yaml"),
+            "S-1-5-21-42",
         );
         assert!(task.contains("C:\\Program Files\\rit.exe"));
         assert!(task.contains("A&amp;B"));
         assert!(task.contains("B\\\\&quot;"));
         assert!(task.contains("InteractiveToken"));
+        assert_eq!(task.matches("<UserId>S-1-5-21-42</UserId>").count(), 2);
         assert!(task.contains("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>"));
     }
 }
