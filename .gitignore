@@ -1,0 +1,7 @@
+/target/
+/.superpowers/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.log
+*.pdf

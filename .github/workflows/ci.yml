@@ -1,0 +1,62 @@
+name: Rust checks and Windows executable
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked --all-targets
+      - run: cargo build --locked --release
+      - name: Smoke test Windows startup task
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $data = Join-Path $env:RUNNER_TEMP 'rit-startup-smoke'
+          New-Item -ItemType Directory -Force -Path $data | Out-Null
+          'transcript_tracking: false' | Set-Content (Join-Path $data 'config.yaml')
+          $rit = Resolve-Path 'target/release/rit.exe'
+          try {
+            & $rit --data-dir $data install-startup
+            if ($LASTEXITCODE -ne 0) { throw 'Task registration/start failed' }
+            $deadline = (Get-Date).AddSeconds(20)
+            $ready = $false
+            do {
+              $snapshot = & $rit --data-dir $data --json status --once | ConvertFrom-Json
+              if ($snapshot.tracking) { $ready = $true; break }
+              Start-Sleep -Milliseconds 250
+            } while ((Get-Date) -lt $deadline)
+            if (-not $ready) { throw 'Scheduled worker did not publish a heartbeat' }
+            & $rit --data-dir $data stop
+            if ($LASTEXITCODE -ne 0) { throw 'Worker stop request failed' }
+          } finally {
+            & $rit --data-dir $data uninstall-startup
+            if ($LASTEXITCODE -ne 0) { throw 'Task removal failed' }
+          }
+      - if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-in-time-windows-x64
+          path: |
+            target/release/rit.exe
+            README.md
+            LICENSE
+            config.invoice.example.yaml
+          if-no-files-found: error
