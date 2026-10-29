@@ -34,6 +34,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $data | Out-Null
           'transcript_tracking: false' | Set-Content (Join-Path $data 'config.yaml')
           $rit = Resolve-Path 'target/release/rit.exe'
+          $success = $false
           try {
             & $rit --data-dir $data install-startup
             if ($LASTEXITCODE -ne 0) { throw 'Task registration/start failed' }
@@ -47,9 +48,10 @@ jobs:
             if (-not $ready) { throw 'Scheduled worker did not publish a heartbeat' }
             & $rit --data-dir $data stop
             if ($LASTEXITCODE -ne 0) { throw 'Worker stop request failed' }
+            $success = $true
           } finally {
             & $rit --data-dir $data uninstall-startup
-            if ($LASTEXITCODE -ne 0) { throw 'Task removal failed' }
+            if ($LASTEXITCODE -ne 0 -and $success) { throw 'Task removal failed' }
           }
       - if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4

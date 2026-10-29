@@ -66,7 +66,7 @@ pub fn install(data: &Path, config: &Path) -> Result<Value> {
         "Windows user SID is missing from whoami output"
     );
     let xml_path = data.join("startup-task.xml");
-    std::fs::write(&xml_path, task_xml(&exe, data, config, sid))?;
+    std::fs::write(&xml_path, task_xml_bytes(&exe, data, config, sid))?;
     let name = task_name(data);
     schtasks(&[
         "/Create".as_ref(),
@@ -171,7 +171,7 @@ pub fn task_xml(exe: &Path, data: &Path, config: &Path, user_sid: &str) -> Strin
         quote(&config.to_string_lossy())
     );
     format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
+        r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
  <RegistrationInfo><Description>Rust in Time project-aware time tracking</Description></RegistrationInfo>
  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>{sid}</UserId></LogonTrigger></Triggers>
@@ -184,6 +184,15 @@ pub fn task_xml(exe: &Path, data: &Path, config: &Path, user_sid: &str) -> Strin
         xml(&data.to_string_lossy()),
         sid = xml(user_sid)
     )
+}
+
+/// Schtasks reads XML through Windows Unicode APIs. The file must agree with
+/// its declaration: UTF-16 little-endian with a BOM, including non-ASCII paths.
+pub fn task_xml_bytes(exe: &Path, data: &Path, config: &Path, user_sid: &str) -> Vec<u8> {
+    std::iter::once(0xfeffu16)
+        .chain(task_xml(exe, data, config, user_sid).encode_utf16())
+        .flat_map(u16::to_le_bytes)
+        .collect()
 }
 
 #[cfg(test)]
@@ -203,5 +212,20 @@ mod tests {
         assert!(task.contains("InteractiveToken"));
         assert_eq!(task.matches("<UserId>S-1-5-21-42</UserId>").count(), 2);
         assert!(task.contains("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>"));
+        assert!(task.contains("encoding=\"UTF-16\""));
+        let bytes = task_xml_bytes(
+            Path::new("C:\\José\\rit.exe"),
+            Path::new("C:\\Data"),
+            Path::new("C:\\Data\\config.yaml"),
+            "S-1-5-21-42",
+        );
+        assert_eq!(&bytes[..2], &[0xff, 0xfe]);
+        let words = bytes[2..]
+            .chunks_exact(2)
+            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+            .collect::<Vec<_>>();
+        let decoded = String::from_utf16(&words).unwrap();
+        assert!(decoded.contains("C:\\José\\rit.exe"));
+        assert!(decoded.contains("encoding=\"UTF-16\""));
     }
 }
