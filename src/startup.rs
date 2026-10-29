@@ -221,8 +221,11 @@ mod tests {
         );
         assert_eq!(&bytes[..2], &[0xff, 0xfe]);
         let words = bytes[2..]
-            .chunks_exact(2)
-            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .copied()
+            .map(u16::from_le_bytes)
             .collect::<Vec<_>>();
         let decoded = String::from_utf16(&words).unwrap();
         assert!(decoded.contains("C:\\José\\rit.exe"));
