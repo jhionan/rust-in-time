@@ -1,0 +1,22 @@
+
+# Uncomment and replace placeholders before using invoice generate.
+# senders:
+#   personal:
+#     legal_name: Your legal name
+#     tax_id: YOUR-TAX-ID
+#     tax_id_label: Tax ID
+#     address_lines: [Your address]
+#     invoice: { number_prefix: "INV-", number_pad: 4, next_number: 1 }
+#     bank_accounts:
+#       EUR:
+#         title: Bank transfer
+#         fields:
+#           - { label: IBAN, value: YOUR-IBAN }
+# clients:
+#   Acme:
+#     legal_name: Acme Ltd
+#     address_lines: [Client address]
+# invoice:
+#   output_dir: ~/Documents/rust-in-time/invoices
+#   line_item_label: Software development services
+#   due_days: 14
