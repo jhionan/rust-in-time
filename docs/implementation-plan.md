@@ -10,7 +10,7 @@
 - [x] Port configuration, transcript collectors, CPU hysteresis and polling; add native Windows focus/idle integration and worker lock (`src/config.rs`, `src/transcripts.rs`, `src/platform.rs`, `src/tracker.rs`).
 - [x] Port invoice generation and PDF rendering, advance credit and numbering with transaction tests (`src/invoice.rs`).
 - [x] Build CLI, interactive review/menu, status/report/summary, configuration and Windows startup management (`src/cli.rs`, `src/main.rs`).
-- [ ] Add Windows CI/release artifacts, documentation and CLI end-to-end tests; verify native Windows compilation, lint/test/release; review and resolve material findings; commit and push feature branch with explicit upstream and open PR.
+- [x] Add Windows CI/release artifacts, documentation and CLI end-to-end tests; verify native Windows compilation, lint/test/release; review and resolve material findings; commit and push feature branch with explicit upstream and open PR.
 
 Independent modules have exclusive owners and share the contracts in design.md. Root integrates and verifies the complete application. Preserve source and live tracker state. Never reset, rebase, force push, or push main directly.
 
